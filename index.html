@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>MCSkin</title>
+<style type="text/css">
+
+html { box-sizing: border-box; font-size: 1vw; }
+
+[role=menubar] { border-bottom: 0.75pt solid; margin-bottom: 0.75em; padding-bottom: 0.25em; }
+[role=menubar] a { float: right; }
+
+[role=tablist] { position: relative; clear: both; margin: 0; padding: 0; }
+[role=tablist]:after { clear: both; content: ''; display: table; }
+[role=tablist] > li { display: inline; margin: 0; }
+[role=tablist] > li > label { padding: 0.25em; border: 0.75pt solid;
+	display: inline-block; position: relative; font-size: smaller;
+	left: 0.75pt; margin-left: -0.75pt; vertical-align: bottom; }
+[role=tablist] > li > [type=radio] { clip: rect(0 0 0 0); opacity: 0; position: fixed;
+	height: 0.75pt; width: 0.75pt; z-index: -1; }
+[role=tabpanel] { display: none; }
+[role=tabpanel] > div { box-sizing: border-box; display: block; border: 0.75pt solid; float: left;
+	margin-top: -0.75pt; width: 100%; padding: 1em 1em; }
+[role=tablist] > li > [type=radio]:checked + label { z-index: 1; border-bottom: 0.75pt solid white; }
+[role=tablist] > li > [type=radio]:focus + label { outline: 0.75pt dotted; }
+[role=tablist] > li > [type=radio]:checked ~ [role=tabpanel] { display: inline; }
+
+.colors > label:first-child { display: inline-block; width: 10em; font-size: smaller; }
+.colors [type=text] { width: 7em; border: none; border-bottom: 0.75pt solid lightgray; font-size: 1rem; }
+.colors [type=checkbox] { clip: rect(0 0 0 0); opacity: 0; position: fixed;
+	height: 0.75pt; width: 0.75pt; z-index: -1; }
+.colors [type=checkbox] + label { border: 0.75pt solid white; font-family: monospace; padding: 0em 0.5em; }
+.colors [type=checkbox]:checked + label { border: 0.75pt inset; }
+.colors [type=checkbox]:focus + label { outline: 0.75pt dotted; }
+.colors .color-bold:checked + label { font-weight: bold; }
+.colors .color-underline:checked + label { text-decoration: underline; }
+.colors .color-reverse:checked + label { color: white; background-color: black; }
+
+.char-well { display: inline-block; margin-right: 1em; }
+.char-well label { font-size: smaller; margin-right: 0.5em; }
+.character-value { width: 1em; border: none; border-bottom: 0.75pt solid lightgray; font-size: 1rem; }
+
+#color-well > div > label { display: block; }
+#color-cube { margin-bottom: -1.5em; }
+.cube-slice { display: inline-block; margin-right: 1.5em; margin-bottom: 1.5em; }
+.color-button { display: inline-block; }
+.color-button [type=radio] { clip: rect(0 0 0 0); opacity: 0; position: fixed;
+	height: 0.75pt; width: 0.75pt; z-index: -1; }
+.color-button [type=radio] + label { display: inline-block; height: 1.5em; }
+.color-button [type=radio] + label:after { content: " "; width: 1.5em; display: inline-block; }
+.color-button [type=radio]:checked + label:after { content: "•"; width: 1.5em; display: inline-block; text-align: center }
+.color-button [type=radio]:focus + label:after { outline: 0.75pt dotted; }
+.color-button.dark { color: white; }
+.color-button.light { color: black; }
+
+pre { display: inline-block; float: right; margin-top: 0em; }
+.default { color: lightgray; background-color: black; }
+</style>
+<template id="colors-template">
+	<div class="colors">
+		<label class="color-label"></label>
+		<input class="color-fg" type="text">
+		<input class="color-bg" type="text">
+		<input class="color-inherit" type="checkbox"><label title="inherit">i</label>
+		<input class="color-bold" type="checkbox"><label title="bold">B</label>
+		<input class="color-underline" type="checkbox"><label title="underline">U</label>
+		<input class="color-reverse" type="checkbox"><label title="reverse">R</label>
+		<input class="color-blink" type="checkbox"><label title="blink">b</label>
+	</div>
+</template>
+<template id="color-button">
+	<div class="color-button"><input type="radio" name="color"><label></label></div>
+</template>
+<script type="text/javascript">
+
+window.onload = function() {
+
+function instantiate(templateId) {
+	return document.getElementById(templateId).content.cloneNode(true).firstElementChild;
+}
+
+function xpathForeach(xpath, context, f) {
+	var all = (context.ownerDocument || context).evaluate(xpath, context, null, XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE, null);
+	for (var i = 0; i < all.snapshotLength; ++i) {
+		f(all.snapshotItem(i));
+	}
+}
+
+
+function makeColor(tabName, color) {
+	var clone = instantiate('colors-template');
+	clone.id = color.id;
+	xpathForeach("input[@type='checkbox']", clone, function(check) {
+		check.id = color.id + "-" + check.className;
+		var label = check.nextSibling;
+		label.htmlFor = check.id;
+	});
+	clone.querySelector(".color-label").textContent = color.label;
+	clone.querySelector(".color-fg").value = color.fg || "";
+	clone.querySelector(".color-bg").value = color.bg || "";
+	clone.querySelector(".color-inherit").checked = color.bold === undefined && color.underline === undefined && color.reverse === undefined && color.blink === undefined;
+	clone.querySelector(".color-bold").checked = color.bold !== undefined;
+	clone.querySelector(".color-underline").checked = color.underline !== undefined;
+	clone.querySelector(".color-reverse").checked = color.reverse !== undefined;
+	clone.querySelector(".color-blink").checked = color.blink !== undefined;
+	return clone;
+}
+
+function makeStyle(data) {
+	var id = data.id || data.char;
+	var style = document.createElement("style");
+	style.id = "style-" + id;
+	style.type = "text/css";
+	style.textContent = "." + id + (data.char ? ":after" : "") + " { }";
+	return style;
+}
+
+
+function ungamma(ic) {
+	var c = ic / 255.0;
+	if (c <= 0.04045)
+		return c / 12.92;
+	else
+		return Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+function gamma(v) {
+	if (v <= 0.031308)
+		v * 12.92;
+	else
+		v = 1.055 * Math.pow(v, 1.0 / 2.4) - 0.055;
+	return Math.round(v * 255);
+}
+
+function gray(r, g, b) {
+	return gamma(0.212655 * ungamma(r) + 0.715158 * ungamma(g) + 0.072187 * ungamma(b));
+}
+
+function makeColorButton(id, color) {
+	var container = instantiate("color-button");
+	var radio = container.querySelector("input");
+	var label = container.querySelector("label");
+	radio.id = id;
+	radio.value = color;
+	label.htmlFor = id;
+	container.style.backgroundColor = color;
+	var red = parseInt(color.substr(1, 2), 16);
+	var green = parseInt(color.substr(3, 2), 16);
+	var blue = parseInt(color.substr(5, 2), 16);
+	container.style.color = gray(red, green, blue) > 128 ? "black" : "white";
+	return container;
+}
+
+
+// Replace line drawing characters in mockups with styled spans
+//
+var lineClasses = {
+	"─": "horiz", "│": "vert", "┌": "lefttop", "┐": "righttop", "└": "leftbottom", "┘": "rightbottom", "├": "leftmiddle",
+	"═": "dhoriz", "║": "dvert", "╔": "dlefttop", "╗": "drighttop", "╚": "dleftbottom", "╝": "drightbottom", "╟": "dleftmiddle", "╢": "drightmiddle" };
+
+xpathForeach("//pre//text()", document, function(textNode) {
+	var re = /[─│┌┐└┘├═║╔╗╚╝╟╢]/;
+	var text = textNode.textContent;
+	if (!re.test(text)) return;
+	for (var result = re.exec(text); result; result = re.exec(text)) {
+		if (result.index > 0) {
+			textNode.parentNode.insertBefore(textNode.ownerDocument.createTextNode(text.substr(0, result.index)), textNode);
+		}
+		textNode.parentNode.insertBefore(textNode.ownerDocument.createElement("span"), textNode).className = "Lines-" + lineClasses[result[0]];
+		text = text.substr(result.index + 1);
+	}
+	if (text) {
+		textNode.textContent = text;
+	}
+	else {
+		textNode.remove();
+	}
+});
+
+
+// Create the color selector
+//
+var colorByIndex = [];
+
+var stdColors = document.querySelector("#std-colors");
+var stdColorData = [
+	[["black", "#000000"], ["red", "#800000"], ["green", "#008000"], ["brown", "#808000"],
+	["blue", "#000080"], ["magenta", "#800080"], ["cyan", "#008080"], ["lightgray", "#C0C0C0"]],
+	[["gray", "#808080"], ["brightred", "#FF0000"], ["brightgreen", "#00FF00"], ["yellow", "#FFFF00"],
+	["brightblue", "#0000FF"], ["brightmagenta", "#FF00FF"], ["brightcyan", "#00FFFF"], ["white", "#FFFFFF"]]];
+
+stdColorData.forEach(function(halfData, halfIndex) {
+	var half = document.createElement("div");
+	halfData.forEach(function(colorData, colorIndex) {
+		colorByIndex[halfIndex * 8 + colorIndex] = colorData[0];
+		half.appendChild(makeColorButton(colorData[0], colorData[1]));
+	});
+	stdColors.appendChild(half);
+});
+
+var cube = document.querySelector("#color-cube");
+var components = ["00", "5F", "87", "AF", "D7", "FF"];
+for (var r = 0; r < 6; ++r) {
+	var slice = document.createElement("div");
+	slice.className = "cube-slice";
+
+	for (var g = 0; g < 6; ++g) {
+		var row = document.createElement("div");
+		row.className = "cube-row";
+		for (var b = 0; b < 6; ++b) {
+			colorByIndex[16 + 36 * r + 6 * g + b] = (("rgb" + r) + g) + b;
+			row.appendChild(makeColorButton((("rgb" + r) + g) + b, "#" + components[r] + components[g] + components[b]));
+		}
+		slice.appendChild(row);
+	}
+	cube.appendChild(slice);
+}
+
+var ramp = document.querySelector("#gray-ramp");
+for (var g = 0; g < 24; ++g)
+{
+	var gg = ("0" + (8 + 10 * g).toString(16)).substr(-2, 2);
+	colorByIndex[232 + g] = "gray" + g;
+	ramp.appendChild(makeColorButton("gray" + g, "#" + gg + gg + gg));
+}
+
+
+// Create controls
+//
+tabsAndControls = {
+	core: [
+		{ id: "core-_default_", label: "Default", fg: "lightgray", bg: "blue" },
+		{ id: "core-terminal_default_color", label: "Terminal default color" },
+		{ id: "core-selected", label: "Selected item", fg: "black", bg: "cyan" },
+		{ id: "core-marked", label: "Marked item", fg: "yellow", bg: "blue" },
+		{ id: "core-markselect", label: "Marked selected", fg: "yellow", bg: "cyan" },
+		{ id: "core-reverse", label: "Reverse", fg: "black", bg: "lightgray" },
+		{ id: "core-header", label: "Header", fg: "yellow", bg: "blue" },
+		{ id: "core-commandlinemark", label: "Command line marked", fg: "black", bg: "lightgray" },
+		{ id: "core-commandhistory", label: "Command history"},
+	],
+	filehighlight: [
+		{ id: "filehighlight-_default_", label: "Default" },
+		{ id: "filehighlight-directory", label: "Directory", fg: "white" },
+		{ id: "filehighlight-archive", label: "Archive", fg: "brightmagenta" },
+		{ id: "filehighlight-core", label: "Core dump", fg: "red" },
+		{ id: "filehighlight-database", label: "Database", fg: "brightred" },
+		{ id: "filehighlight-device", label: "Device", fg: "brightmagenta" },
+		{ id: "filehighlight-doc", label: "Document", fg: "brown" },
+		{ id: "filehighlight-executable", label: "Executable", fg: "brightgreen" },
+		{ id: "filehighlight-graph", label: "Graph", fg: "brightcyan" },
+		{ id: "filehighlight-media", label: "Media", fg: "brightgreen" },
+		{ id: "filehighlight-source", label: "Source", fg: "cyan" },
+		{ id: "filehighlight-special", label: "Special", fg: "black" },
+		{ id: "filehighlight-stalelink", label: "Stale link", fg: "brightred" },
+		{ id: "filehighlight-symlink", label: "Symlink", fg: "lightgray" },
+		{ id: "filehighlight-temp", label: "Temporary", fg: "gray" },
+	],
+	menu: [
+		{ id: "menu-_default_", label: "Default", fg: "white", bg: "cyan" },
+		{ id: "menu-menuhot", label: "Hotkey", fg: "yellow", bg: "cyan" },
+		{ id: "menu-menusel", label: "Selected item", fg: "white", bg: "black" },
+		{ id: "menu-menuhotsel", label: "Selected hotkey", fg: "yellow", bg: "black" },
+		{ id: "menu-menuinactive", label: "Inactive menu", fg: "black", bg: "cyan" },
+		{ id: "buttonbar-_default_", label: "Button default" },
+		{ id: "buttonbar-hotkey", label: "Button hotkey", fg: "white", bg: "black" },
+		{ id: "buttonbar-button", label: "Button text", fg: "black", bg: "cyan" },
+	],
+	popupmenu: [
+		{ id: "popupmenu-_default_", label: "Default", fg: "white", bg: "cyan" },
+		{ id: "popupmenu-menutitle", label: "Title", fg: "yellow", bg: "cyan" },
+		{ id: "popupmenu-menusel", label: "Selected item", fg: "yellow", bg: "black" },
+	],
+	dialog: [
+		{ id: "dialog-_default_", label: "Default", fg: "black", bg: "lightgray" },
+		{ id: "dialog-dtitle", label: "Title", fg: "blue", bg: "lightgray" },
+		{ id: "dialog-dhotnormal", label: "Hotkey", fg: "blue", bg: "lightgray" },
+		{ id: "dialog-dfocus", label: "Focused item", fg: "black", bg: "cyan" },
+		{ id: "dialog-dhotfocus", label: "Focused hotkey", fg: "blue", bg: "cyan" },
+		{ id: "core-disabled", label: "Disabled item", fg: "gray", bg: "lightgray" },
+		{ id: "core-input", label: "Input", fg: "black", bg: "cyan" },
+		{ id: "core-inputhistory", label: "Input history" },
+		{ id: "core-inputmark", label: "Input marked text", fg: "cyan", bg: "black" },
+		{ id: "core-inputunchanged", label: "Unchanged input", fg: "gray", bg: "cyan" },
+		{ id: "core-gauge", label: "Gauge", fg: "white", bg: "black" },
+	],
+	error: [
+		{ id: "error-_default_", label: "Default", fg: "white", bg: "red" },
+		{ id: "error-errdtitle", label: "Title", fg: "yellow", bg: "red" },
+		{ id: "error-errdhotnormal", label: "Hotkey", fg: "yellow", bg: "red" },
+		{ id: "error-errdfocus", label: "Focused item", fg: "black", bg: "lightgray" },
+		{ id: "error-errdhotfocus", label: "Focused hotkey", fg: "yellow", bg: "lightgray" },
+	],
+	help: [
+		{ id: "help-_default_", label: "Default", fg: "black", bg: "lightgray" },
+		{ id: "help-helptitle", label: "Title", fg: "blue", bg: "lightgray" },
+		{ id: "help-helpitalic", label: "Italic", fg: "red", bg: "lightgray" },
+		{ id: "help-helpbold", label: "Bold", fg: "blue", bg: "lightgray" },
+		{ id: "help-helplink", label: "Link", fg: "black", bg: "cyan" },
+		{ id: "help-helpslink", label: "Selected link", fg: "yellow", bg: "blue" },
+	],
+	viewer: [
+		{ id: "statusbar-_default_", label: "Status bar", fg: "black", bg: "cyan" },
+		{ id: "viewer-_default_", label: "Default" },
+		{ id: "viewer-viewbold", label: "Bold", fg: "yellow", bg: "blue" },
+		{ id: "viewer-viewunderline", label: "Underline", fg: "brightred", bg: "blue" },
+		{ id: "viewer-viewselected", label: "Selected text", fg: "yellow", bg: "cyan" },
+	],
+	diffviewer: [
+		{ id: "diffviewer-_default_", label: "Default" },
+		{ id: "diffviewer-added", label: "Added line", fg: "white", bg: "green" },
+		{ id: "diffviewer-changedline", label: "Changed line", fg: "blue", bg: "cyan" },
+		{ id: "diffviewer-changednew", label: "New text", fg: "red", bg: "cyan" },
+		{ id: "diffviewer-changed", label: "Deleted line in group", fg: "white", bg: "cyan" },
+		{ id: "diffviewer-removed", label: "Removed line", fg: "white", bg: "red" },
+		{ id: "diffviewer-folder", label: "Folder (unused?)" },
+		{ id: "diffviewer-error", label: "Error (unused?)" },
+	],
+	editor: [
+		{ id: "editor-_default_", label: "Default", fg: "lightgray", bg: "blue" },
+		{ id: "editor-editbold", label: "Bold", fg: "yellow", bg: "green" },
+		{ id: "editor-editmarked", label: "Marked text", fg: "black", bg: "cyan" },
+		{ id: "editor-editwhitespace", label: "Whitespace", fg: "brightblue", bg: "blue" },
+		{ id: "editor-editrightmargin", label: "Right margin", fg: "brightblue", bg: "black" },
+		{ id: "editor-editlinestate", label: "Line numbers", fg: "white", bg: "cyan" },
+		{ id: "editor-editbg", label: "Background" },
+		{ id: "editor-editframe", label: "Window frame" },
+		{ id: "editor-editframeactive", label: "Active frame", fg: "white" },
+		{ id: "editor-editframedrag", label: "Dragged frame", fg: "green" },
+		{ id: "editor-bookmark", label: "Bookmark", fg: "white", bg: "red" },
+		{ id: "editor-bookmarkfound", label: "Bookmark by search", fg: "black", bg: "green" },
+	],
+	Lines: [
+		{ char: "Lines-horiz", label: "Horizontal", value: "─" },
+		{ char: "Lines-vert", label: "Vertical", value: "│" },
+		{ char: "Lines-lefttop", label: "Top left", value: "┌" },
+		{ char: "Lines-righttop", label: "Top right", value: "┐" },
+		{ char: "Lines-leftbottom", label: "Bottom left", value: "└" },
+		{ char: "Lines-rightbottom", label: "Bottom right", value: "┘" },
+		{ char: "Lines-topmiddle", label: "Top middle (unused)", value: "─" },
+		{ char: "Lines-bottommiddle", label: "Bottom middle (unused)", value: "─" },
+		{ char: "Lines-leftmiddle", label: "Left middle", value: "├" },
+		{ char: "Lines-rightmiddle", label: "Right middle (unused)", value: "┤" },
+		{ char: "Lines-cross", label: "Cross (unused)", value: "┼" },
+		{ char: "Lines-dhoriz", label: "Horizontal", value: "─" },
+		{ char: "Lines-dvert", label: "Vertical", value: "│" },
+		{ char: "Lines-dlefttop", label: "Top left", value: "┌" },
+		{ char: "Lines-drighttop", label: "Top right", value: "┐" },
+		{ char: "Lines-dleftbottom", label: "Bottom left", value: "└" },
+		{ char: "Lines-drightbottom", label: "Bottom right", value: "┘" },
+		{ char: "Lines-dtopmiddle", label: "Top middle (unused)", value: "─" },
+		{ char: "Lines-dbottommiddle", label: "Bottom middle (unused)", value: "─" },
+		{ char: "Lines-dleftmiddle", label: "Left middle", value: "├" },
+		{ char: "Lines-drightmiddle", label: "Right middle", value: "┤" },
+
+		{ char: "widget-common-sort-sign-up", label: "Sort ascending", value: "'" },
+		{ char: "widget-common-sort-sign-down", label: "Sort descending", value: "," },
+		{ char: "widget-panel-hiddenfiles-sign-show", label: "Show hidden files", value: "." },
+		{ char: "widget-panel-hiddenfiles-sign-hide", label: "Hide hidden files", value: "." },
+		{ char: "widget-panel-history-prev-item-sign", label: "History back", value: "<" },
+		{ char: "widget-panel-history-next-item-sign", label: "History forward", value: ">" },
+		{ char: "widget-panel-history-show-list-sign", label: "History show", value: "^" },
+		{ char: "widget-panel-filename-scroll-left-char", label: "Scroll left", value: "{" },
+		{ char: "widget-panel-filename-scroll-right-char", label: "Scroll right", value: "}" },
+
+		{ char: "editor-window-state-char", label: "(Un)maximize editor", value: "*" },
+		{ char: "editor-window-close-char", label: "Close editor", value: "X" },
+	],
+};
+
+for (var tabName in tabsAndControls) {
+	var tabControls = tabsAndControls[tabName];
+
+	var panel = document.querySelector("#tab-" + tabName).parentNode.querySelector("[role=tabpanel] div");
+	tabControls.forEach(function(control) {
+		if (control.id) {
+			var color = makeColor(tabName, control);
+			panel.appendChild(color);
+			document.head.appendChild(makeStyle(control));
+			colorChange({target: color});
+		}
+		else if (control.char) {
+			var character = document.getElementById(control.char);
+			character.className = "character-value";
+			character.title = control.label;
+			character.value = control.value;
+			character.onchange = characterChange;
+			document.head.appendChild(makeStyle(control));
+			characterChange({target: character});
+		}
+	});
+}
+
+
+// Event handling
+//
+function normalizeColor(name) {
+	if (name === "darkgray") return "gray";
+	var m = /^color(\d+)$/.exec(name);
+	return m ? colorByIndex[parseInt(m[1], 10)] : name;
+}
+
+
+function colorInputFocus(event) {
+	window.focusedColorInput = event.target;
+	document.querySelector("#" + (normalizeColor(event.target.value) || "transparent")).checked = true;
+}
+
+function colorValues(color) {
+	var attrs = [];
+	if (color.querySelector(".color-bold").checked) attrs.push("bold");
+	if (color.querySelector(".color-underline").checked) attrs.push("underline");
+	if (color.querySelector(".color-reverse").checked) attrs.push("reverse");
+	if (color.querySelector(".color-blink").checked) attrs.push("blink");
+	return [color.querySelector(".color-fg").value, color.querySelector(".color-bg").value,
+		attrs.join("+") || (color.querySelector(".color-inherit").checked ? "" : "none")];
+}
+
+function colorChange(event) {
+	var color = document.evaluate("ancestor-or-self::*[@class='colors']", event.target, null, XPathResult.ANY_UNORDERED_NODE_TYPE, null).singleNodeValue;
+	var group_id = color.id.split("-")[0];
+	var group_default = document.getElementById(group_id + "-_default_");
+	var core_default = document.getElementById("core-_default_");
+
+	var color_values = colorValues(color);
+	var group_values = colorValues(group_default);
+	var core_values = colorValues(core_default);
+
+	var fg = normalizeColor(color_values[0] || group_values[0] || core_values[0]);
+	var bg = normalizeColor(color_values[1] || group_values[1] || core_values[1]);
+	var attrs = (color_values[2] || group_values[2] || core_values[2]).split("+")
+
+	var fgColor = document.getElementById(fg || "transparent").value || "inherit";
+	var bgColor = document.getElementById(bg || "transparent").value || "inherit";
+	
+	var style = document.getElementById("style-" + color.id).sheet.cssRules[0].style;
+	style.color = attrs.indexOf("reverse") !== -1 ? bgColor: fgColor;
+	style.backgroundColor = attrs.indexOf("reverse") !== -1 ? fgColor : bgColor;
+	style.fontWeight = attrs.indexOf("bold") !== -1 ? "bold" : "normal";
+	style.textDecoration = attrs.indexOf("underline") !== -1 ? "underline" : "none";
+
+	if (color.id.split("-")[1] === "_default_") {
+		var selector = "//*[@class='colors' and starts-with(@id, '" + group_id + "-') and @id != '" + color.id + "']";
+		xpathForeach(selector, document, function(color1) {
+			colorChange({ target: color1 });
+		});
+	}
+
+	if (color.id === "core-_default_") {
+		xpathForeach("//*[@class='colors' and contains(@id, '-_default_') and @id != 'core-_default_']", document, function(color1) {
+			colorChange({ target: color1 });
+		});
+	}
+}
+
+function attributeCheckClick(event) {
+	var color = document.evaluate("ancestor-or-self::*[@class='colors']", event.target, null, XPathResult.ANY_UNORDERED_NODE_TYPE, null).singleNodeValue;
+	color.querySelector(".color-inherit").checked = false;
+	colorChange(event);
+}
+
+function inheritCheckClick(event) {
+	var color = document.evaluate("ancestor-or-self::*[@class='colors']", event.target, null, XPathResult.ANY_UNORDERED_NODE_TYPE, null).singleNodeValue;
+	if (event.target.checked) {
+		xpathForeach(".//input[@type = 'checkbox' and @class != 'color-inherit']", color, function(check) {
+			check.checked = false;
+		});
+	}
+	colorChange(event);
+}
+
+function colorButtonClick(event) {
+	window.focusedColorInput.value = event.target.id === "transparent" ? "" : event.target.id;
+	colorChange({target: window.focusedColorInput});
+}
+
+function characterChange(event) {
+	var character = event.target;
+	var style = document.getElementById("style-" + character.id).sheet.cssRules[0].style;
+	var value = character.value;
+	style.content = value === "'" ? '"\'"' : ("'" + value + "'");
+}
+
+xpathForeach("//*[@class='color-fg' or @class='color-bg']", document, function(input) {
+	input.onfocus = colorInputFocus;
+	input.onchange = colorChange;
+});
+
+xpathForeach("//*[@id='color-well']//input", document, function(radio) {
+	radio.onclick = colorButtonClick;
+});
+
+xpathForeach("//input[contains(' color-bold color-underline color-reverse color-blink ', concat(' ', @class, ' '))]", document, function(check) {
+	check.onclick = attributeCheckClick;
+});
+
+xpathForeach("//input[@class = 'color-inherit']", document, function(check) {
+	check.onclick = inheritCheckClick;
+});
+
+
+// Saving and loading
+//
+function formatKey(key) {
+	return "    " + key.name + "=" + key.value + "\n";
+}
+
+function formatSection(name, keys) {
+	return "[" + name + "]\n" + keys.map(formatKey).join("");
+}
+
+function saveSkin() {
+	var sections = { 
+		"skin": [
+			{ name: "description", value: "Generated skin" },
+			{ name: "256colors", value: "true" },
+		],
+	};
+	xpathForeach("//*[@class='colors']", document, function(color) {
+		var parts = color.id.split("-");
+		if (!sections[parts[0]]) sections[parts[0]] = [];
+		sections[parts[0]].push({ name: parts[1], value: colorValues(color).join(";").replace(/;+$/, "") });
+	});
+	xpathForeach("//*[@class='character-value']", document, function(character) {
+		var parts = character.id.split("-");
+		var section = parts[0] == "widget" ? parts.slice(0, 2).join("-") : parts[0];
+		var name = parts.slice(parts[0] == "widget" ? 2 : 1).join("-");
+		if (!sections[section]) sections[section] = [];
+		sections[section].push({ name: name, value: character.value });
+	});
+	var sectionNames = ["skin", "Lines", "core", "filehighlight", "menu", "buttonbar", "popupmenu",
+		"dialog", "error", "help", "statusbar", "viewer", "diffviewer", "editor", "widget-common", "widget-panel"];
+	var content = sectionNames.map(function(sectionName) {
+		return formatSection(sectionName, sections[sectionName]);
+	}).join("\n");
+	var link = document.createElement("a");
+	link.href = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
+	link.download = "mcskin.ini";
+	document.body.appendChild(link);
+	link.click();
+	link.remove();
+}
+
+function parseSkin(s) {
+	var lines = s.split("\n");
+	var sections = {};
+	var currentSection = null;
+	lines.forEach(function(line) {
+		line = line.replace(/#.*$/, '');
+		var m = /^\[(.*)\]$/.exec(line);
+		if (m) {
+			sections[m[1]] = {};
+			currentSection = sections[m[1]];
+		}
+		else {
+			m = /^\s*(\S[^=]*)\s*=(.*)$/.exec(line);
+			if (m) {
+				currentSection[m[1]] = m[2].trim();
+			}
+		}
+	});
+	
+	for (var sectionName in sections) {
+		var section = sections[sectionName];
+		for (var key in section) {
+			var value = section[key];
+			var control = document.getElementById(sectionName + "-" + key);
+			if (control) {
+				switch (control.className) {
+				case "colors":
+					var parts = (value || "").split(";");
+					control.querySelector(".color-fg").value = parts[0] || "";
+					control.querySelector(".color-bg").value = parts[1] || "";
+					control.querySelector(".color-inherit").checked = (parts[2] || "") === "";
+					var attrs = (parts[2] || "").split("+");
+					control.querySelector(".color-bold").checked = attrs.indexOf("bold") !== -1;
+					control.querySelector(".color-underline").checked = attrs.indexOf("underline") !== -1;
+					control.querySelector(".color-reverse").checked = attrs.indexOf("reverse") !== -1;
+					control.querySelector(".color-blink").checked = attrs.indexOf("blink") !== -1;
+					colorChange({ target: control });
+					break;
+				case "character-value":
+					console.log(sectionName + "-" + key, control);
+					control.value = value;
+					characterChange({ target: control });
+					break;
+				}
+			}
+			else {
+				console.log(sectionName + "-" + key);
+			}
+		}
+	}
+}
+
+function loadSkin() {
+	var upload = document.createElement("input");
+	upload.type = "file";
+	upload.accept = ".ini";
+	document.body.appendChild(upload);
+	upload.onchange = function() {
+		var reader = new FileReader;
+		reader.onerror = function() {
+			console.log(reader.error);
+			upload.remove();
+		}
+		reader.onload = function() {
+			parseSkin(reader.result);
+			upload.remove();
+		}
+		reader.readAsText(upload.files[0]);
+	}
+	upload.click();
+}
+
+document.getElementById("open-button").onclick = loadSkin;
+document.getElementById("save-button").onclick = saveSkin;
+
+}
+</script>
+</head>
+<body>
+
+<div role="menubar">
+	<button role="menuitem" id="open-button">Open</button>
+	<button role="menuitem" id="save-button">Save</button>
+	<a href="https://github.com/yurikhan/mcskin">github:yurikhan/mcskin</a>
+</div>
+
+<ul role="tablist">
+
+<li>
+	<input type="radio" id="tab-core" name="tab" checked>
+	<label role="tab" for="tab-core">Core</label>
+	<div role="tabpanel"><div>
+
+<pre role="img" class="core-_default_">
+<samp><span class="menu-menuinactive">  Left     File     Command     Options     Right                               </span>
+╔<span class="widget-panel-history-prev-item-sign"></span>═<span class="core-reverse"> ~/projects/mcskin/core </span>═══════<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗╔<span class="widget-panel-history-prev-item-sign"></span>═ ...ects/mcskin/filehighlight ═<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗
+║<span class="core-header">'m      Name       </span>│<span class="core-header"> Size  </span>│<span class="core-header">Permission</span>║║<span class="core-header">'n      Name       </span>│<span class="core-header"> Size  </span>│<span class="core-header">Permission</span>║
+║<span class="filehighlight-directory">/..                </span>│<span class="filehighlight-directory">UP--DIR</span>│<span class="filehighlight-directory">d<span class="core-marked">rwx</span>rwxr-x</span>║║<span class="filehighlight-directory">/..                </span>│<span class="filehighlight-directory">UP--DIR</span>│<span class="filehighlight-directory">d<span class="core-marked">rwx</span>rwxr-x</span>║
+║ default           │      0│-<span class="core-marked">rw-</span>rw----║║<span class="filehighlight-directory">/directory         </span>│<span class="filehighlight-directory">   4096</span>│<span class="filehighlight-directory">d<span class="core-marked">rwx</span>rwx---</span>║
+║<span class="core-selected"> selected          │      0│-<span class="core-markselect">rw-</span>rw----</span>║║ default           │      0│-<span class="core-marked">rw-</span>rw----║
+║<span class="core-marked"> marked            </span>│<span class="core-marked">      0</span>│<span class="core-marked">-rw-rw----</span>║║<span class="filehighlight-archive"> archive.zip       </span>│<span class="filehighlight-archive">      0</span>│<span class="filehighlight-archive">-<span class="core-marked">rw-</span>rw----</span>║
+║<span class="core-markselect"> markselect        </span>│<span class="core-markselect">      0</span>│<span class="core-markselect">-rw-rw----</span>║║<span class="filehighlight-core"> core              </span>│<span class="filehighlight-core">      0</span>│<span class="filehighlight-core">-<span class="core-marked">rw-</span>rw----</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-database"> database.db       </span>│<span class="filehighlight-database">      0</span>│<span class="filehighlight-database">-<span class="core-marked">rw-</span>rw----</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-device">-device            </span>│<span class="filehighlight-device">    1,3</span>│<span class="filehighlight-device">crw-r--<span class="core-marked">---</span></span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-doc"> doc.doc           </span>│<span class="filehighlight-doc">      0</span>│<span class="filehighlight-doc">-<span class="core-marked">rw-</span>rw----</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-executable">*executable        </span>│<span class="filehighlight-executable">      0</span>│<span class="filehighlight-executable">-<span class="core-marked">rwx</span>r-xr-x</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-graph"> graph.png         </span>│<span class="filehighlight-graph">      0</span>│<span class="filehighlight-graph">-<span class="core-marked">rw-</span>rw----</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-media"> media.wav         </span>│<span class="filehighlight-media">      0</span>│<span class="filehighlight-media">-<span class="core-marked">rw-</span>rw----</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-source"> source.c          </span>│<span class="filehighlight-source">      0</span>│<span class="filehighlight-source">-<span class="core-marked">rw-</span>rw----</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-special">|special           </span>│<span class="filehighlight-special">      0</span>│<span class="filehighlight-special">p<span class="core-marked">rw-</span>rw----</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-stalelink">!stalelink         </span>│<span class="filehighlight-stalelink">      5</span>│<span class="filehighlight-stalelink">l<span class="core-marked">rwx</span>rwxrwx</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-symlink">@symlink           </span>│<span class="filehighlight-symlink">     10</span>│<span class="filehighlight-symlink">l<span class="core-marked">rwx</span>rwxrwx</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-temp"> temp~             </span>│<span class="filehighlight-temp">      0</span>│<span class="filehighlight-temp">-<span class="core-marked">rw-</span>rw----</span>║
+╟─────────<span class="core-marked"> 0 bytes in 2 files </span>─────────╢╟──────────────────────────────────────╢
+║ selected          │      0│-<span class="core-marked">rw-</span>rw----║║UP--DIR                               ║
+╚════════════════════ 9666M/73G (12%) ═╝╚════════════════════ 9666M/73G (12%) ═╝
+<span class="default">Hint: Want your plain shell? Press C-o, and get back to MC with C-o again.      
+khan@RND-086:~/projects/mcskin/core (master)$ rm <span class="core-commandlinemark">-rf</span> /                       </span><span class="core-commandhistory">[<span class="widget-panel-history-show-list-sign"></span>]</span>
+<span class="buttonbar-button"><span class="buttonbar-hotkey"> 1</span>Help  <span class="buttonbar-hotkey"> 2</span>Menu  <span class="buttonbar-hotkey"> 3</span>View  <span class="buttonbar-hotkey"> 4</span>Edit  <span class="buttonbar-hotkey"> 5</span>Copy  <span class="buttonbar-hotkey"> 6</span>RenMov<span class="buttonbar-hotkey"> 7</span>Mkdir <span class="buttonbar-hotkey"> 8</span>Delete<span class="buttonbar-hotkey"> 9</span>PullDn<span class="buttonbar-hotkey">10</span>Quit  </samp></pre>
+
+</div></div>
+</li>
+
+<li>
+	<input type="radio" id="tab-filehighlight" name="tab">
+	<label role="tab" for="tab-filehighlight">File highlight</label>
+	<div role="tabpanel"><div>
+
+<pre role="img" class="core-_default_">
+<samp><span class="menu-menuinactive">  Left     File     Command     Options     Right                               </span>
+╔<span class="widget-panel-history-prev-item-sign"></span>═<span class="core-reverse"> ~/projects/mcskin/core </span>═══════<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗╔<span class="widget-panel-history-prev-item-sign"></span>═ ...ects/mcskin/filehighlight ═<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗
+║<span class="core-header">'m      Name       </span>│<span class="core-header"> Size  </span>│<span class="core-header">Permission</span>║║<span class="core-header">'n      Name       </span>│<span class="core-header"> Size  </span>│<span class="core-header">Permission</span>║
+║<span class="filehighlight-directory">/..                </span>│<span class="filehighlight-directory">UP--DIR</span>│<span class="filehighlight-directory">d<span class="core-marked">rwx</span>rwxr-x</span>║║<span class="filehighlight-directory">/..                </span>│<span class="filehighlight-directory">UP--DIR</span>│<span class="filehighlight-directory">d<span class="core-marked">rwx</span>rwxr-x</span>║
+║ default           │      0│-<span class="core-marked">rw-</span>rw----║║<span class="filehighlight-directory">/directory         </span>│<span class="filehighlight-directory">   4096</span>│<span class="filehighlight-directory">d<span class="core-marked">rwx</span>rwx---</span>║
+║<span class="core-selected"> selected          │      0│-<span class="core-markselect">rw-</span>rw----</span>║║ default           │      0│-<span class="core-marked">rw-</span>rw----║
+║<span class="core-marked"> marked            </span>│<span class="core-marked">      0</span>│<span class="core-marked">-rw-rw----</span>║║<span class="filehighlight-archive"> archive.zip       </span>│<span class="filehighlight-archive">      0</span>│<span class="filehighlight-archive">-<span class="core-marked">rw-</span>rw----</span>║
+║<span class="core-markselect"> markselect        </span>│<span class="core-markselect">      0</span>│<span class="core-markselect">-rw-rw----</span>║║<span class="filehighlight-core"> core              </span>│<span class="filehighlight-core">      0</span>│<span class="filehighlight-core">-<span class="core-marked">rw-</span>rw----</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-database"> database.db       </span>│<span class="filehighlight-database">      0</span>│<span class="filehighlight-database">-<span class="core-marked">rw-</span>rw----</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-device">-device            </span>│<span class="filehighlight-device">    1,3</span>│<span class="filehighlight-device">crw-r--<span class="core-marked">---</span></span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-doc"> doc.doc           </span>│<span class="filehighlight-doc">      0</span>│<span class="filehighlight-doc">-<span class="core-marked">rw-</span>rw----</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-executable">*executable        </span>│<span class="filehighlight-executable">      0</span>│<span class="filehighlight-executable">-<span class="core-marked">rwx</span>r-xr-x</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-graph"> graph.png         </span>│<span class="filehighlight-graph">      0</span>│<span class="filehighlight-graph">-<span class="core-marked">rw-</span>rw----</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-media"> media.wav         </span>│<span class="filehighlight-media">      0</span>│<span class="filehighlight-media">-<span class="core-marked">rw-</span>rw----</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-source"> source.c          </span>│<span class="filehighlight-source">      0</span>│<span class="filehighlight-source">-<span class="core-marked">rw-</span>rw----</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-special">|special           </span>│<span class="filehighlight-special">      0</span>│<span class="filehighlight-special">p<span class="core-marked">rw-</span>rw----</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-stalelink">!stalelink         </span>│<span class="filehighlight-stalelink">      5</span>│<span class="filehighlight-stalelink">l<span class="core-marked">rwx</span>rwxrwx</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-symlink">@symlink           </span>│<span class="filehighlight-symlink">     10</span>│<span class="filehighlight-symlink">l<span class="core-marked">rwx</span>rwxrwx</span>║
+║                   │       │       <span class="core-marked">   </span>║║<span class="filehighlight-temp"> temp~             </span>│<span class="filehighlight-temp">      0</span>│<span class="filehighlight-temp">-<span class="core-marked">rw-</span>rw----</span>║
+╟─────────<span class="core-marked"> 0 bytes in 2 files </span>─────────╢╟──────────────────────────────────────╢
+║ selected          │      0│-<span class="core-marked">rw-</span>rw----║║UP--DIR                               ║
+╚════════════════════ 9666M/73G (12%) ═╝╚════════════════════ 9666M/73G (12%) ═╝
+<span class="default">Hint: Want your plain shell? Press C-o, and get back to MC with C-o again.      
+khan@RND-086:~/projects/mcskin/core (master)$ rm <span class="core-commandlinemark">-rf</span> /                       </span><span class="core-commandhistory">[<span class="widget-panel-history-show-list-sign"></span>]</span>
+<span class="buttonbar-button"><span class="buttonbar-hotkey"> 1</span>Help  <span class="buttonbar-hotkey"> 2</span>Menu  <span class="buttonbar-hotkey"> 3</span>View  <span class="buttonbar-hotkey"> 4</span>Edit  <span class="buttonbar-hotkey"> 5</span>Copy  <span class="buttonbar-hotkey"> 6</span>RenMov<span class="buttonbar-hotkey"> 7</span>Mkdir <span class="buttonbar-hotkey"> 8</span>Delete<span class="buttonbar-hotkey"> 9</span>PullDn<span class="buttonbar-hotkey">10</span>Quit  </samp></pre>
+
+</div></div>
+</li>
+
+<li>
+	<input type="radio" id="tab-menu" name="tab">
+	<label role="tab" for="tab-menu">Menu</label>
+	<div role="tabpanel"><div>
+
+<pre role="img" class="core-_default_">
+<samp><span class="menu-_default_">  <span class="menu-menuhot">L</span>eft     <span class="menu-menuhot">F</span>ile     <span class="menu-menuhot">C</span>ommand     <span class="menu-menuhot">O</span>ptions    <span class="menu-menusel"> <span class="menu-menuhotsel">R</span>ight </span>                              </span>
+╔<span class="widget-panel-history-prev-item-sign"></span>═ ...n/filehighlight/directory ═<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗╔<span class="widget-panel-history-prev-item-sign"></span><span class="menu-_default_">╔═══════════════════════╗</span>ctory ═<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗
+║<span class="core-header">'m      Name       </span>│<span class="core-header"> Size  </span>│<span class="core-header">Permission</span>║║<span class="core-header">'</span><span class="menu-_default_">║ File listin<span class="menu-menuhot">g</span>          ║</span><span class="core-header"> </span>│<span class="core-header">Permission</span>║
+║<span class="filehighlight-directory">/..                </span>│<span class="filehighlight-directory">UP--DIR</span>│<span class="filehighlight-directory">d<span class="core-marked">rwx</span>rwx---</span>║║<span class="filehighlight-directory">/</span><span class="menu-_default_">║ <span class="menu-menuhot">Q</span>uick view       C-x q║</span><span class="filehighlight-directory">R</span>│<span class="filehighlight-directory">d<span class="core-marked">rwx</span>rwx---</span>║
+║                   │       │       <span class="core-marked">   </span>║║ <span class="menu-_default_">║ <span class="menu-menuhot">I</span>nfo             C-x i║</span> │       <span class="core-marked">   </span>║
+║                   │       │       <span class="core-marked">   </span>║║ <span class="menu-_default_">║ <span class="menu-menuhot">T</span>ree                  ║</span> │       <span class="core-marked">   </span>║
+║                   │       │       <span class="core-marked">   </span>║║ <span class="menu-_default_">╟───────────────────────╢</span> │       <span class="core-marked">   </span>║
+║                   │       │       <span class="core-marked">   </span>║║ <span class="menu-_default_">║<span class="menu-menusel"> <span class="menu-menuhotsel">L</span>isting mode...       </span>║</span> │       <span class="core-marked">   </span>║
+║                   │       │       <span class="core-marked">   </span>║║ <span class="menu-_default_">║ <span class="menu-menuhot">S</span>ort order...         ║</span> │       <span class="core-marked">   </span>║
+║                   │       │       <span class="core-marked">   </span>║║ <span class="menu-_default_">║ <span class="menu-menuhot">F</span>ilter...             ║</span> │       <span class="core-marked">   </span>║
+║                   │       │       <span class="core-marked">   </span>║║ <span class="menu-_default_">║ <span class="menu-menuhot">E</span>ncoding...      M-e  ║</span> │       <span class="core-marked">   </span>║
+║                   │       │       <span class="core-marked">   </span>║║ <span class="menu-_default_">╟───────────────────────╢</span> │       <span class="core-marked">   </span>║
+<span class="default">                                                                                </span>
+<span class="menu-menuinactive">  Left     File     Command     Options     Right                               </span>
+╔<span class="widget-panel-history-prev-item-sign"></span>═<span class="core-reverse"> ~/projects/mcskin/core </span>═══════<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗╔<span class="widget-panel-history-prev-item-sign"></span>═ ...ects/mcskin/filehighlight ═<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗
+║<span class="core-header">'m      Name       </span>│<span class="core-header"> Size  </span>│<span class="core-header">Permission</span>║║<span class="core-header">'n      Name       </span>│<span class="core-header"> Size  </span>│<span class="core-header">Permission</span>║
+║<span class="filehighlight-directory">/..                </span>│<span class="filehighlight-directory">UP--DIR</span>│<span class="filehighlight-directory">d<span class="core-marked">rwx</span>rwxr-x</span>║║<span class="filehighlight-directory">/..                </span>│<span class="filehighlight-directory">UP--DIR</span>│<span class="filehighlight-directory">d<span class="core-marked">rwx</span>rwxr-x</span>║
+║ default           │      0│-<span class="core-marked">rw-</span>rw----║║<span class="filehighlight-directory">/directory         </span>│<span class="filehighlight-directory">   4096</span>│<span class="filehighlight-directory">d<span class="core-marked">rwx</span>rwx---</span>║
+║<span class="core-selected"> selected          │      0│-<span class="core-markselect">rw-</span>rw----</span>║║ default           │      0│-<span class="core-marked">rw-</span>rw----║
+╟─────────<span class="core-marked"> 0 bytes in 2 files </span>─────────╢╟──────────────────────────────────────╢
+║ selected          │      0│-<span class="core-marked">rw-</span>rw----║║UP--DIR                               ║
+╚════════════════════ 9666M/73G (12%) ═╝╚════════════════════ 9666M/73G (12%) ═╝
+<span class="default">Hint: Want your plain shell? Press C-o, and get back to MC with C-o again.      
+khan@RND-086:~/projects/mcskin/core (master)$ rm <span class="core-commandlinemark">-rf</span> /                       </span><span class="core-commandhistory">[<span class="widget-panel-history-show-list-sign"></span>]</span>
+<span class="buttonbar-button"><span class="buttonbar-hotkey"> 1</span>Help  <span class="buttonbar-hotkey"> 2</span>Menu  <span class="buttonbar-hotkey"> 3</span>View  <span class="buttonbar-hotkey"> 4</span>Edit  <span class="buttonbar-hotkey"> 5</span>Copy  <span class="buttonbar-hotkey"> 6</span>RenMov<span class="buttonbar-hotkey"> 7</span>Mkdir <span class="buttonbar-hotkey"> 8</span>Delete<span class="buttonbar-hotkey"> 9</span>PullDn<span class="buttonbar-hotkey">10</span>Quit  </samp></pre>
+</div></div>
+</li>
+
+<li>
+	<input type="radio" id="tab-popupmenu" name="tab">
+	<label role="tab" for="tab-popupmenu">Popup menu</label>
+	<div role="tabpanel"><div>
+
+<pre role="img" class="core-_default_">
+<samp><span class="menu-menuinactive">  Left     File     Command     Options     Right                               </span>
+╔<span class="widget-panel-history-prev-item-sign"></span>═ ...n/filehighlight/directory ═<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗╔<span class="widget-panel-history-prev-item-sign"></span>═<span class="core-reverse"> ...n/filehighlight/directory </span>═<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗
+║<span class="core-header">'m      Name       </span>│<span class="core-header"> Size  </span>│<span class="core-header">Permission</span>║║<span class="core-header">'n      Name       </span>│<span class="core-header"> Size  </span>│<span class="core-header">Permission</span>║
+║<span class="filehighlight-directory">/..                </span>│<span class="filehighlight-directory">UP--DIR</span>│<span class="filehighlight-directory">d<span class="core-marked">rwx</span>rwxr-x</span>║║<span class="core-selected">/..                │UP--DIR│d<span class="core-markselect">rwx</span>rwxr-x</span>║
+║        <span class="popupmenu-_default_">                                                                  </span> <span class="core-marked">   </span>║
+║        <span class="popupmenu-_default_"> ╔═════════════════════════<span class="popupmenu-menutitle"> User menu </span>══════════════════════════╗ </span> <span class="core-marked">   </span>║
+║        <span class="popupmenu-_default_"> ║ e       Edit file                                            ║ </span> <span class="core-marked">   </span>║
+║        <span class="popupmenu-_default_"> ║ E       Sudo edit file                                       ║ </span> <span class="core-marked">   </span>║
+║        <span class="popupmenu-_default_"> ║ C       Sudo copy file to opposite                           ║ </span> <span class="core-marked">   </span>║
+║        <span class="popupmenu-_default_"> ║ c       Copy file path to clipboard                          ║ </span> <span class="core-marked">   </span>║
+║        <span class="popupmenu-_default_"> ║ <span class="popupmenu-menusel">@       Do something on the current file                    </span> ║ </span> <span class="core-marked">   </span>║
+║        <span class="popupmenu-_default_"> ║ 3       Compress the current subdirectory (tar.gz)           ║ </span> <span class="core-marked">   </span>║
+║        <span class="popupmenu-_default_"> ║ 4       Compress the current subdirectory (tar.bz2)          ║ </span> <span class="core-marked">   </span>║
+║        <span class="popupmenu-_default_"> ║ 5       Compress the current subdirectory (tar.p7)           ║ </span> <span class="core-marked">   </span>║
+║        <span class="popupmenu-_default_"> ║ 6       Compress the current subdirectory (tar.lzma)         ║ </span> <span class="core-marked">   </span>║
+║        <span class="popupmenu-_default_"> ║ 7       Compress the current subdirectory (tar.lz)           ║ </span> <span class="core-marked">   </span>║
+║        <span class="popupmenu-_default_"> ║ 8       Compress the current subdirectory (tar.xz)           ║ </span> <span class="core-marked">   </span>║
+║        <span class="popupmenu-_default_"> ║ z       7zip files to other directory                        ║ </span> <span class="core-marked">   </span>║
+║        <span class="popupmenu-_default_"> ╚══════════════════════════════════════════════════════════════╝ </span> <span class="core-marked">   </span>║
+╟────────<span class="popupmenu-_default_">                                                                  </span>────╢
+║UP--DIR                               ║║UP--DIR                               ║
+╚════════════════════ 9658M/73G (12%) ═╝╚════════════════════ 9658M/73G (12%) ═╝
+<span class="default">Hint: % macros work even on the command line.                                   
+khan@RND-086:…/projects/mcskin/filehighlight/directory (master)$             </span><span class="core-_default_"><span class="core-commandhistory">[<span class="widget-panel-history-show-list-sign"></span>]</span></span>
+<span class="buttonbar-button"><span class="buttonbar-hotkey"> 1</span>Help  <span class="buttonbar-hotkey"> 2</span>Menu  <span class="buttonbar-hotkey"> 3</span>View  <span class="buttonbar-hotkey"> 4</span>Edit  <span class="buttonbar-hotkey"> 5</span>Copy  <span class="buttonbar-hotkey"> 6</span>RenMov<span class="buttonbar-hotkey"> 7</span>Mkdir <span class="buttonbar-hotkey"> 8</span>Delete<span class="buttonbar-hotkey"> 9</span>PullDn<span class="buttonbar-hotkey">10</span>Quit  </samp></pre>
+</div></div>
+</li>
+
+<li>
+	<input type="radio" id="tab-dialog" name="tab">
+	<label role="tab" for="tab-dialog">Dialog</label>
+	<div role="tabpanel"><div>
+
+<pre role="img" class="core-_default_">
+<samp><span class="menu-menuinactive">  Left     File     Command     Options     Right                               </span>
+╔<span class="widget-panel-history-prev-item-sign"></span>═ ...n/filehighlight/directory ═<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗╔<span class="widget-panel-history-prev-item-sign"></span>═<span class="core-reverse"> ...n/filehighlight/directory </span>═<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗
+║<span class="core-header">'m      Name       </span>│<span class="core-header"> Size  </span>│<span class="core-header">Permission</span>║║<span class="core-header">'n      Name       </span>│<span class="core-header"> Size  </span>│<span class="core-header">Permission</span>║
+║<span class="filehighlight-directory">/..        </span><span class="dialog-_default_">                                                        </span>│<span class="core-selected">d<span class="core-markselect">rwx</span>rwx---</span>║
+║           <span class="dialog-_default_"> ╔═══════════<span class="dialog-dtitle"> Virtual File System Setting </span>════════════╗ </span>│       <span class="core-marked">   </span>║
+║           <span class="dialog-_default_"> ║ Timeout for freeing VFSs (sec): <span class="core-inputunchanged">60             </span><span class="core-_default_"><span class="core-inputhistory">[<span class="widget-panel-history-show-list-sign"></span>]</span></span> ║ </span>│       <span class="core-marked">   </span>║
+║           <span class="dialog-_default_"> ╟────────────────────────────────────────────────────╢ </span>│       <span class="core-marked">   </span>║
+║           <span class="dialog-_default_"> ║ FTP anonymous password: <span class="core-input"><span class="core-inputmark">anonymous@</span>             </span><span class="core-_default_"><span class="core-inputhistory">[<span class="widget-panel-history-show-list-sign"></span>]</span></span> ║ </span>│       <span class="core-marked">   </span>║
+║           <span class="dialog-_default_"> ║ FTP directory cache timeout (sec): <span class="core-input">900         </span><span class="core-_default_"><span class="core-inputhistory">[<span class="widget-panel-history-show-list-sign"></span>]</span></span> ║ </span>│       <span class="core-marked">   </span>║
+║           <span class="dialog-_default_"> ║ [ ] <span class="dialog-dhotnormal">A</span>lways use ftp proxy:                          ║ </span>│       <span class="core-marked">   </span>║
+║           <span class="dialog-_default_"> ║ <span class="core-disabled">gate                                              </span> ║ </span>│       <span class="core-marked">   </span>║
+║           <span class="dialog-_default_"> ║ <span class="dialog-dfocus">[x] <span class="dialog-dhotfocus">U</span>se ~/.netrc</span>                                   ║ </span>│       <span class="core-marked">   </span>║
+║           <span class="dialog-_default_"> ║ [x] Use <span class="dialog-dhotnormal">p</span>assive mode                               ║ </span>│       <span class="core-marked">   </span>║
+║           <span class="dialog-_default_"> ║ [ ] Use passive mode over pro<span class="dialog-dhotnormal">x</span>y                    ║ </span>│       <span class="core-marked">   </span>║
+║           <span class="dialog-_default_"> ║      [<span class="core-gauge">            </span>                      ]  34%     ║ </span>│       <span class="core-marked">   </span>║
+║           <span class="dialog-_default_"> ╟────────────────────────────────────────────────────╢ </span>│       <span class="core-marked">   </span>║
+║           <span class="dialog-_default_"> ║                [< <span class="dialog-dhotnormal">O</span>K >] [ <span class="dialog-dhotnormal">C</span>ancel ]                 ║ </span>│       <span class="core-marked">   </span>║
+║           <span class="dialog-_default_"> ╚════════════════════════════════════════════════════╝ </span>│       <span class="core-marked">   </span>║
+║                   │       │       <span class="core-marked">   </span>║║                   │       │       <span class="core-marked">   </span>║
+╟──────────────────────────────────────╢╟──────────────────────────────────────╢
+║UP--DIR                               ║║UP--DIR                               ║
+╚════════════════════ 9662M/73G (12%) ═╝╚════════════════════ 9662M/73G (12%) ═╝
+<span class="default">Hint: You can disable all requests for confirmation in Options/Confirmation.    
+khan@RND-086:…/projects/mcskin/filehighlight/directory (master)$             </span><span class="core-commandhistory">[<span class="widget-panel-history-show-list-sign"></span>]</span>
+<span class="buttonbar-button"><span class="buttonbar-hotkey"> 1</span>Help  <span class="buttonbar-hotkey"> 2</span>Menu  <span class="buttonbar-hotkey"> 3</span>View  <span class="buttonbar-hotkey"> 4</span>Edit  <span class="buttonbar-hotkey"> 5</span>Copy  <span class="buttonbar-hotkey"> 6</span>RenMov<span class="buttonbar-hotkey"> 7</span>Mkdir <span class="buttonbar-hotkey"> 8</span>Delete<span class="buttonbar-hotkey"> 9</span>PullDn<span class="buttonbar-hotkey">10</span>Quit  </samp></pre>
+</div></div>
+</li>
+
+<li>
+	<input type="radio" id="tab-error" name="tab">
+	<label role="tab" for="tab-error">Error</label>
+	<div role="tabpanel"><div>
+
+<pre role="img" class="core-_default_">
+<samp><span class="menu-menuinactive">  Left     File     Command     Options     Right                               </span>
+╔<span class="widget-panel-history-prev-item-sign"></span>═ ~/projects/mcskin/core ═══════<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗╔<span class="widget-panel-history-prev-item-sign"></span>═<span class="core-reverse"> ~/projects/mcskin/core </span>═══════<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗
+║<span class="core-header">'m      Name       </span>│<span class="core-header"> Size  </span>│<span class="core-header">Permission</span>║║<span class="core-header">'n      Name       </span>│<span class="core-header"> Size  </span>│<span class="core-header">Permission</span>║
+║<span class="filehighlight-directory">/..                </span>│<span class="filehighlight-directory">UP--DIR</span>│<span class="filehighlight-directory">d<span class="core-marked">rwx</span>rwxr-x</span>║║<span class="filehighlight-directory">/..                </span>│<span class="filehighlight-directory">UP--DIR</span>│<span class="filehighlight-directory">d<span class="core-marked">rwx</span>rwxr-x</span>║
+║ default           │      0│-<span class="core-marked">rw-</span>rw----║║<span class="core-selected"> default           │      0│-<span class="core-markselect">rw-</span>rw----</span>║
+║ selected          │      0│-<span class="core-marked">rw-</span>rw----║║ marked            │      0│-<span class="core-marked">rw-</span>rw----║
+║ marked     <span class="dialog-_default_">                                                     </span> 0│-<span class="core-marked">rw-</span>rw----║
+║ markselect <span class="dialog-_default_"> ╔═════════════════════<span class="dialog-dtitle"> Copy </span>══════════════════════╗ </span> 0│-<span class="core-marked">rw-</span>rw----║
+║            <span class="dialog-_default_"> ║ S<span class="error-_default_">                                               </span>║ </span>  │       <span class="core-marked">   </span>║
+║            <span class="dialog-_default_"> ║ d<span class="error-_default_"> ╔══════════════════<span class="error-errdtitle"> Error </span>══════════════════╗ </span>║ </span>  │       <span class="core-marked">   </span>║
+║            <span class="dialog-_default_"> ║ T<span class="error-_default_"> ║ "/home/khan/projects/mcskin/core/default" ║ </span>║ </span>  │       <span class="core-marked">   </span>║
+║            <span class="dialog-_default_"> ║ /<span class="error-_default_"> ║                    and                    ║ </span>║ </span>  │       <span class="core-marked">   </span>║
+║            <span class="dialog-_default_"> ║  <span class="error-_default_"> ║ "/home/khan/projects/mcskin/core/default" ║ </span>║ </span>  │       <span class="core-marked">   </span>║
+║            <span class="dialog-_default_"> ║  <span class="error-_default_"> ║             are the same file             ║ </span>║ </span>  │       <span class="core-marked">   </span>║
+║            <span class="dialog-_default_"> ╟──<span class="error-_default_"> ╟───────────────────────────────────────────╢ </span>╢ </span>  │       <span class="core-marked">   </span>║
+║            <span class="dialog-_default_"> ║  <span class="error-_default_"> ║            <span class="error-errdfocus">[ <span class="error-errdhotfocus">S</span>kip ]</span>  [ <span class="error-errdhotnormal">A</span>bort ]            ║ </span>║ </span>  │       <span class="core-marked">   </span>║
+║            <span class="dialog-_default_"> ╚══<span class="error-_default_"> ╚═══════════════════════════════════════════╝ </span>╝ </span>  │       <span class="core-marked">   </span>║
+║            <span class="dialog-_default_">    <span class="error-_default_">                                               </span>  </span>  │       <span class="core-marked">   </span>║
+║                   │       │       <span class="core-marked">   </span>║║                   │       │       <span class="core-marked">   </span>║
+╟──────────────────────────────────────╢╟──────────────────────────────────────╢
+║UP--DIR                               ║║ default           │      0│-rw-rw----║
+╚════════════════════ 9659M/73G (12%) ═╝╚════════════════════ 9659M/73G (12%) ═╝
+<span class="default">Hint: Completion works on all input lines in all dialogs. Just press M-Tab.     
+khan@RND-086:~/projects/mcskin/core (master)$                                </span><span class="core-_default_"><span class="core-commandhistory">[<span class="widget-panel-history-show-list-sign"></span>]</span></span>
+<span class="buttonbar-button"><span class="buttonbar-hotkey"> 1</span>Help  <span class="buttonbar-hotkey"> 2</span>Menu  <span class="buttonbar-hotkey"> 3</span>View  <span class="buttonbar-hotkey"> 4</span>Edit  <span class="buttonbar-hotkey"> 5</span>Copy  <span class="buttonbar-hotkey"> 6</span>RenMov<span class="buttonbar-hotkey"> 7</span>Mkdir <span class="buttonbar-hotkey"> 8</span>Delete<span class="buttonbar-hotkey"> 9</span>PullDn<span class="buttonbar-hotkey">10</span>Quit  </samp></pre>
+</div></div>
+</li>
+
+<li>
+	<input type="radio" id="tab-help" name="tab">
+	<label role="tab" for="tab-help">Help</label>
+	<div role="tabpanel"><div>
+
+<pre role="img" class="core-_default_">
+<samp><span class="menu-menuinactive">  Left     File     Command     Options     Right                               </span>
+╔<span class="widget-panel-history-prev-item-sign"></span>═ ..<span class="help-_default_">                                                                    </span><span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗
+║<span class="core-header">'m   </span><span class="help-_default_"> ╔═════════════════════════════<span class="help-helptitle"> Help </span>═════════════════════════════╗ </span><span class="core-header">ssion</span>║
+║/..  <span class="help-_default_"> ║        means hold the Meta or Alt key down while typing &lt;chr&gt;. ║ </span><span class="core-selected">wx---</span>║
+║     <span class="help-_default_"> ║If there is no Meta or Alt key, type <span class="help-helpitalic">ESC</span>, release it, then type ║ </span>     ║
+║     <span class="help-_default_"> ║the character &lt;chr&gt;.                                            ║ </span>     ║
+║     <span class="help-_default_"> ║                                                                ║ </span>     ║
+║     <span class="help-_default_"> ║<span class="help-helpbold">S-&lt;chr&gt;</span> means hold the Shift key down while typing &lt;chr&gt;.       ║ </span>     ║
+║     <span class="help-_default_"> ║                                                                ║ </span>     ║
+║     <span class="help-_default_"> ║All input lines in the Midnight Commander use an approximation  ║ </span>     ║
+║     <span class="help-_default_"> ║to the GNU Emacs editor's key bindings (default).               ║ </span>     ║
+║     <span class="help-_default_"> ║                                                                ║ </span>     ║
+║     <span class="help-_default_"> ║You may redefine key bindings. See <span class="help-helplink">redefine hotkey bindings</span>     ║ </span>     ║
+║     <span class="help-_default_"> ║                                                                ║ </span>     ║
+║     <span class="help-_default_"> ║for more info. All other key bindings (described in this        ║ </span>     ║
+║     <span class="help-_default_"> ║manual) relative to default behavior.                           ║ </span>     ║
+║     <span class="help-_default_"> ║                                                                ║ </span>     ║
+║     <span class="help-_default_"> ║There are many sections which tell about the keys. The          ║ </span>     ║
+║     <span class="help-_default_"> ║following are the most important.                               ║ </span>     ║
+╟─────<span class="help-_default_"> ║                                                                ║ </span>─────╢
+║UP--D<span class="help-_default_"> ║The <span class="help-helpslink">File Menu</span> section documents the keyboard shortcuts for the  ║ </span>     ║
+╚═════<span class="help-_default_"> ╚════════════════════════════════════════════════════════════════╝ </span>2%) ═╝
+<span class="default">Note: </span><span class="help-_default_">                                                                    </span><span class="default">.     
+khan@RND-086:…/projects/mcskin/filehighlight/directory (master)$             </span><span class="core-_default_"><span class="core-commandhistory">[<span class="widget-panel-history-show-list-sign"></span>]</span></span>
+<span class="buttonbar-button"><span class="buttonbar-hotkey"> 1</span>Help  <span class="buttonbar-hotkey"> 2</span>Menu  <span class="buttonbar-hotkey"> 3</span>View  <span class="buttonbar-hotkey"> 4</span>Edit  <span class="buttonbar-hotkey"> 5</span>Copy  <span class="buttonbar-hotkey"> 6</span>RenMov<span class="buttonbar-hotkey"> 7</span>Mkdir <span class="buttonbar-hotkey"> 8</span>Delete<span class="buttonbar-hotkey"> 9</span>PullDn<span class="buttonbar-hotkey">10</span>Quit  </samp></pre>
+</div></div>
+</li>
+
+<li>
+	<input type="radio" id="tab-viewer" name="tab">
+	<label role="tab" for="tab-viewer">Viewer</label>
+	<div role="tabpanel"><div>
+
+<pre role="img" class="core-_default_">
+<samp><span class="statusbar-_default_">/usr/share/doc/mc/FAQ.gz                        0x00000020                      </span>
+<span class="viewer-viewbold">00000000</span> 47 4E 55 20 │ 4D 69 64 6E │ 69 67 68 74 │ 20 43 6F 6D  GNU Midnight Com
+<span class="viewer-viewbold">00000010</span> 6D 61 6E 64 │ 65 72 0A 46 │ 72 65 71 75 │ 65 6E 74 6C  mander.Frequentl
+<span class="viewer-viewbold">00000020</span> <span class="viewer-viewunderline">79</span> 20 41 73 │ 6B 65 64 20 │ 51 75 65 73 │ 74 69 6F 6E  <span class="viewer-viewselected">y</span> Asked Question
+<span class="viewer-viewbold">00000030</span> 73 0A 0A 20 │ 20 20 54 68 │ 65 20 6E 65 │ 77 65 73 74  s..   The newest
+<span class="viewer-viewbold">00000040</span> 20 76 65 72 │ 73 69 6F 6E │ 20 6F 66 20 │ 74 68 69 73   version of this
+<span class="viewer-viewbold">00000050</span> 20 64 6F 63 │ 75 6D 65 6E │ 74 20 69 73 │ 20 61 76 61   document is ava
+<span class="viewer-viewbold">00000060</span> 69 6C 61 62 │ 6C 65 20 61 │ 74 0A 20 20 │ 20 68 74 74  ilable at.   htt
+<span class="viewer-viewbold">00000070</span> 70 3A 2F 2F │ 77 77 77 2E │ 6D 69 64 6E │ 69 67 68 74  p://www.midnight
+<span class="viewer-viewbold">00000080</span> 2D 63 6F 6D │ 6D 61 6E 64 │ 65 72 2E 6F │ 72 67 2F 62  -commander.org/b
+<span class="viewer-viewbold">00000090</span> 72 6F 77 73 │ 65 72 2F 64 │ 6F 63 2F 46 │ 41 51 0A 0A  rowser/doc/FAQ..
+<span class="viewer-viewbold">000000A0</span> 20 20 20 20 │ 20 2A 20 31 │ 20 47 65 74 │ 74 69 6E 67       * 1 Getting
+<span class="default">                                                                                </span>
+                                                                                
+<span class="viewer-viewbold">DESCRIPTION</span>                                                                     
+       <span class="viewer-viewbold">Bash</span>  is  an  <span class="viewer-viewbold">sh</span>-compatible  command language interpreter that executes  
+       commands read from the standard input or from a file.  <span class="viewer-viewbold">Bash</span> also incor-  
+       porates useful features from the <span class="viewer-viewunderline">Korn</span> and <span class="viewer-viewunderline">C</span> shells (<span class="viewer-viewbold">ksh</span> and <span class="viewer-viewbold">csh</span>).        
+                                                                                
+       <span class="viewer-viewbold">Bash</span>  is  intended  to  be a conformant implementation of the Shell and  
+       Utilities portion  of  the  IEEE  POSIX  specification  (IEEE  Standard  
+       1003.1).  <span class="viewer-viewbold">Bash</span> can be configured to be POSIX-conformant by default.      
+                                                                                
+<span class="viewer-viewbold">OPTIONS</span>                                                                         
+<span class="buttonbar-button"><span class="buttonbar-hotkey"> 1</span>Help  <span class="buttonbar-hotkey"> 2</span>Wrap  <span class="buttonbar-hotkey"> 3</span>Quit  <span class="buttonbar-hotkey"> 4</span>Hex   <span class="buttonbar-hotkey"> 5</span>Goto  <span class="buttonbar-hotkey"> 6</span>      <span class="buttonbar-hotkey"> 7</span>Search<span class="buttonbar-hotkey"> 8</span>Raw   <span class="buttonbar-hotkey"> 9</span>Unform<span class="buttonbar-hotkey">10</span>Quit  </span></samp></pre>
+</div></div>
+</li>
+
+<li>
+	<input type="radio" id="tab-diffviewer" name="tab">
+	<label role="tab" for="tab-diffviewer">Diff viewer</label>
+	<div role="tabpanel"><div>
+
+<pre role="img" class="core-_default_">
+<samp><span class="statusbar-_default_">  ...kin/diff/rev1      1+0    Col 0      ...kin/diff/rev2      1+0    Dif 3    </span>
+╔══════════════════════════════════════╗╔══════════════════════════════════════╗
+║Unchanged line                        ║║Unchanged line                        ║
+║<span class="diffviewer-added">Removed line                          </span>║║<span class="diffviewer-removed">                                      </span>║
+║Unchanged line                        ║║Unchanged line                        ║
+║<span class="diffviewer-changednew">Previous</span><span class="diffviewer-changedline"> version                      </span>║║<span class="diffviewer-changednew">Modified</span><span class="diffviewer-changedline"> version                      </span>║
+║<span class="diffviewer-changednew">Deleted line in group                 </span>║║<span class="diffviewer-changed">                                      </span>║
+║Unchanged line                        ║║Unchanged line                        ║
+║<span class="diffviewer-removed">                                      </span>║║<span class="diffviewer-added">Added line                            </span>║
+║                                      ║║                                      ║
+║                                      ║║                                      ║
+║                                      ║║                                      ║
+║                                      ║║                                      ║
+║                                      ║║                                      ║
+║                                      ║║                                      ║
+║                                      ║║                                      ║
+║                                      ║║                                      ║
+║                                      ║║                                      ║
+║                                      ║║                                      ║
+║                                      ║║                                      ║
+║                                      ║║                                      ║
+║                                      ║║                                      ║
+║                                      ║║                                      ║
+╚══════════════════════════════════════╝╚══════════════════════════════════════╝
+<span class="buttonbar-button"><span class="buttonbar-hotkey"> 1</span>Help  <span class="buttonbar-hotkey"> 2</span>Save  <span class="buttonbar-hotkey"> 3</span>      <span class="buttonbar-hotkey"> 4</span>Edit  <span class="buttonbar-hotkey"> 5</span>Merge <span class="buttonbar-hotkey"> 6</span>      <span class="buttonbar-hotkey"> 7</span>Search<span class="buttonbar-hotkey"> 8</span>      <span class="buttonbar-hotkey"> 9</span>Opt~ns<span class="buttonbar-hotkey">10</span>Quit  </span></samp></pre>
+</div></div>
+</li>
+
+<li>
+	<input type="radio" id="tab-editor" name="tab">
+	<label role="tab" for="tab-editor">Editor</label>
+	<div role="tabpanel"><div>
+
+<pre role="img" class="core-_default_">
+<samp><span class="menu-menuinactive">  File     Edit     Search     Command     Format     Window     Options        </span>
+<span class="editor-_default_"><span class="editor-editframe">┌─<span class="statusbar-_default_">[FAQ.gz]</span>────<span class="statusbar-_default_">[----]</span>────────────────────────────────────────────────[<span class="editor-window-state-char"></span>][<span class="editor-window-close-char"></span>]─┐</span><span class="editor-editbg">    </span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">      1 </span>GNU Midnight Commander                                      <span class="editor-editrightmargin">      </span><span class="editor-editframe">│</span><span class="editor-editbg">    </span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframeactive">╔═<span class="statusbar-_default_">[default.ini]</span>════<span class="statusbar-_default_">[BM--]</span>═══════════════════════════════════════════[<span class="editor-window-state-char"></span>][<span class="editor-window-close-char"></span>]═╗</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframeactive">║</span><span class="editor-editlinestate">     95 </span>    helptitle=blue;lightgray                                <span class="editor-editrightmargin">      </span><span class="editor-editframeactive">║</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframeactive">║</span><span class="editor-editlinestate">     96 </span>                                                            <span class="editor-editrightmargin">      </span><span class="editor-editframeactive">║</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframeactive">║</span><span class="editor-editlinestate">     97 </span>[editor]                                                    <span class="editor-editrightmargin">      </span><span class="editor-editframeactive">║</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframeactive">║</span><span class="editor-editlinestate">     98 </span>    _default_=lightgray;blue                                <span class="editor-editrightmargin">      </span><span class="editor-editframeactive">║</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframeactive">║</span><span class="editor-editlinestate">     99 </span>    edit<span class="editor-editbold">bold</span>=yellow;green                                   <span class="editor-editrightmargin">      </span><span class="editor-editframeactive">║</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframeactive">║</span><span class="editor-editlinestate">    100 </span><span class="editor-editmarked">    editmarked=black;cyan</span>                                   <span class="editor-editrightmargin">      </span><span class="editor-editframeactive">║</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframeactive">║</span><span class="editor-editlinestate">    101 </span>    editwhitespace=brightblue;blue<span class="editor-editwhitespace">..&lt;--&gt;</span>                    <span class="editor-editrightmargin">      </span><span class="editor-editframeactive">║</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframeactive">║</span><span class="editor-editlinestate">    102 </span>    editlinestate=white;cyan                                <span class="editor-editrightmargin">      </span><span class="editor-editframeactive">║</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframeactive">║</span><span class="editor-editlinestate">*   103 </span><span class="editor-bookmark">    bookmark=white;red                                      </span><span class="editor-editrightmargin">      </span><span class="editor-editframeactive">║</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframeactive">║</span><span class="editor-editlinestate">    104 </span><span class="editor-bookmarkfound">    bookmarkfound=black;green                               </span><span class="editor-editrightmargin">      </span><span class="editor-editframeactive">║</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframeactive">║</span><span class="editor-editlinestate">    105 </span>    editrightmargin=brightblue;black # a very looooonnnng li<span class="editor-editrightmargin">ne    </span><span class="editor-editframeactive">║</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframeactive">║</span><span class="editor-editlinestate">    106 </span>#    editbg=lightgray;                                      <span class="editor-editrightmargin">      </span><span class="editor-editframeactive">║</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframeactive">╚═<span class="statusbar-_default_">  8    99/139   1881/2771</span>═════<span class="statusbar-_default_">[00098 0x0062]</span>═════════════════════════════<span class="editor-editframedrag">┘</span></span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframe">┌─<span class="statusbar-_default_">[NoName]</span>────<span class="statusbar-_default_">[-M--]</span>────────────────────────────────────────────────[<span class="editor-window-state-char"></span>][<span class="editor-window-close-char"></span>]─┐</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframe">│</span><span class="editor-editlinestate">      1 </span><span class="editor-_default_">Syntax highlight uses these colors, check they are legible: <span class="editor-editrightmargin">      </span><span class="editor-editframe">│</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframe">│</span><span class="editor-editlinestate">      2 </span><span class="editor-_default_"><span style="color: #000000">black</span>         <span style="color: #800000">red</span>           <span style="color: #008000">green</span>         <span style="color: #808000">brown</span>             <span class="editor-editrightmargin">      </span><span class="editor-editframe">│</span>
+<span class="editor-editframe">│</span><span class="editor-editlinestate">   </span><span class="editor-editframe">│</span><span class="editor-editlinestate">      3 </span><span class="editor-_default_"><span style="color: #000080">blue</span>          <span style="color: #800080">magenta</span>       <span style="color: #008080">cyan</span>          <span style="color: #C0C0C0">lightgray</span>         <span class="editor-editrightmargin">      </span><span class="editor-editframe">│</span>
+<span class="editor-editframe">└─</span><span class="statusbar-_default_" >  </span><span class="editor-editframe">│</span><span class="editor-editlinestate">      4 </span><span class="editor-_default_"><span style="color: #808080">gray</span>          <span style="color: #FF0000">brightred</span>     <span style="color: #00FF00">brightgreen</span>   <span style="color: #FFFF00">yellow</span>            <span class="editor-editrightmargin">      </span><span class="editor-editframe">│</span>
+<span class="editor-editbg">    </span                                             ><span class="editor-editframe">│</span><span class="editor-editlinestate">      5 </span><span class="editor-_default_"><span style="color: #0000FF">brightblue</span>    <span style="color: #FF00FF">brightmagenta</span> <span style="color: #00FFFF">brightcyan</span>    <span style="color: #FFFFFF">white</span>             <span class="editor-editrightmargin">      </span><span class="editor-editframe">│</span>
+<span class="editor-editbg">    </span                                             ><span class="editor-editframe">└─<span class="statusbar-_default_">  0     5/5    197/197</span>────────<span class="statusbar-_default_">[&lt;EOF&gt;       ]</span>─────────────────────────────<span class="editor-editframedrag">┘</span></span></span>
+<span class="buttonbar-button"><span class="buttonbar-hotkey"> 1</span>Help  <span class="buttonbar-hotkey"> 2</span>Save  <span class="buttonbar-hotkey"> 3</span>Mark  <span class="buttonbar-hotkey"> 4</span>Replac<span class="buttonbar-hotkey"> 5</span>Copy  <span class="buttonbar-hotkey"> 6</span>Move  <span class="buttonbar-hotkey"> 7</span>Search<span class="buttonbar-hotkey"> 8</span>Delete<span class="buttonbar-hotkey"> 9</span>PullDn<span class="buttonbar-hotkey">10</span>Quit  </span></samp></pre>
+</div></div>
+</li>
+
+<li>
+	<input type="radio" id="tab-Lines" name="tab">
+	<label role="tab" for="tab-Lines">Characters</label>
+	<div role="tabpanel"><div>
+
+<pre role="img">
+<samp><span class="core-_default_">╔═══════════ Directory tree ═══════════╗╔<span class="widget-panel-history-prev-item-sign"></span>═ /boot ════════════════════════<span class="widget-panel-hiddenfiles-sign-show"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗
+║/                                     ║║<span class="core-header"><span class="widget-common-sort-sign-up"></span>n     Name      </span>│<span class="core-header"> Size  </span>│<span class="core-header">Modify time </span>║
+║ ├─ bin                               ║║<span class="filehighlight-directory">/..              </span>│<span class="filehighlight-directory">UP--DIR</span>│<span class="filehighlight-directory">Sep 24 08:42</span>║
+║ ├─ boot                              ║║<span class="filehighlight-directory">/grub            </span>│<span class="filehighlight-directory">   4096</span>│<span class="filehighlight-directory">Sep 24 08:43</span>║
+║ │  └─ grub                           ║<span class="widget-panel-filename-scroll-left-char"></span> System.map-3.13.<span class="widget-panel-filename-scroll-right-char"></span>3378641│Jul  5 05:18║
+║ ├─ cdrom                             ║<span class="widget-panel-filename-scroll-left-char"></span> System.map-3.13.<span class="widget-panel-filename-scroll-right-char"></span>3381262│Jul 15 11:29║
+║ ├─ dev                               ║<span class="widget-panel-filename-scroll-left-char"></span> System.map-3.13.<span class="widget-panel-filename-scroll-right-char"></span>3381262│Aug 13 23:45║
+║ ├─ etc                               ║<span class="widget-panel-filename-scroll-left-char"></span> System.map-3.13.<span class="widget-panel-filename-scroll-right-char"></span>3386444│Aug 15 09:56║
+║ ├─ home                              ║<span class="widget-panel-filename-scroll-left-char"></span> System.map-3.13.<span class="widget-panel-filename-scroll-right-char"></span>3386479│Sep  4 05:24║
+╟──────────────────────────────────────╢╟──────────────────────────────────────╢
+║/                                     ║║UP--DIR                               ║
+╚══════════════════════════════════════╝╚══════════════════════ 26G/39G (66%) ═╝</span>
+<span class="default">                                                                                </span>
+<span class="editor-editframeactive">╔═<span class="statusbar-_default_">[default.ini]</span>════<span class="statusbar-_default_">[----]</span>═══════[<span class="editor-window-state-char"></span>][<span class="editor-window-close-char"></span>]═╗</span><span class="core-_default_">╔<span class="widget-panel-history-prev-item-sign"></span>═ /boot ════════════════════════<span class="widget-panel-hiddenfiles-sign-hide"></span>[<span class="widget-panel-history-show-list-sign"></span>]<span class="widget-panel-history-next-item-sign"></span>╗</span>
+<span class="editor-editframeactive">║</span><span class="editor-editlinestate">    106 </span><span class="editor-_default_">#    editbg=lightgray;        </span><span class="editor-editframeactive">║</span><span class="core-_default_">║<span class="core-header"><span class="widget-common-sort-sign-down"></span>n     Name      </span>│<span class="core-header"> Size  </span>│<span class="core-header">Modify time </span>║</span>
+<span class="editor-editframeactive">║</span><span class="editor-editlinestate">    107 </span><span class="editor-_default_">#    editframe=lightgray;     </span><span class="editor-editframeactive">║</span><span class="core-_default_">║<span class="filehighlight-directory">/..              </span>│<span class="filehighlight-directory">UP--DIR</span>│<span class="filehighlight-directory">Sep 24 08:42</span>║</span>
+<span class="editor-editframeactive">║</span><span class="editor-editlinestate">    108 </span><span class="editor-_default_">    editframeactive=white;    </span><span class="editor-editframeactive">║</span><span class="core-_default_">║<span class="filehighlight-directory">/grub            </span>│<span class="filehighlight-directory">   4096</span>│<span class="filehighlight-directory">Sep 24 08:43</span>║</span>
+<span class="editor-editframeactive">║</span><span class="editor-editlinestate">    109 </span><span class="editor-_default_">    editframedrag=green;      </span><span class="editor-editframeactive">║</span><span class="core-_default_">║ vmlinuz-~generic│5806848│Sep  4 05:24║</span>
+<span class="editor-editframeactive">║</span><span class="editor-editlinestate">    110 </span><span class="editor-_default_">    window-state-char = *     </span><span class="editor-editframeactive">║</span><span class="core-_default_">║ vmlinuz-~generic│5806368│Aug 15 09:56║</span>
+<span class="editor-editframeactive">║</span><span class="editor-editlinestate">    111 </span><span class="editor-_default_">    window-close-char = X     </span><span class="editor-editframeactive">║</span><span class="core-_default_">║ vmlinuz-~generic│5797728│Aug 13 23:45║</span>
+<span class="editor-editframeactive">║</span><span class="editor-editlinestate">    112 </span><span class="editor-_default_">                              </span><span class="editor-editframeactive">║</span><span class="core-_default_">║ vmlinuz-~generic│5798112│Jul 15 11:29║</span>
+<span class="editor-editframeactive">║</span><span class="editor-editlinestate">    113 </span><span class="editor-_default_">[viewer]                      </span><span class="editor-editframeactive">║</span><span class="core-_default_">║ vmlinuz-~generic│5792608│Jul  5 05:18║</span>
+<span class="editor-editframeactive">║</span><span class="editor-editlinestate">    114 </span><span class="editor-_default_">    viewbold=yellow;blue      </span><span class="editor-editframeactive">║</span><span class="core-_default_">╟──────────────────────────────────────╢</span>
+<span class="editor-editframeactive">║</span><span class="editor-editlinestate">    115 </span><span class="editor-_default_">    viewunderline=brightred;bl</span><span class="editor-editframeactive">║</span><span class="core-_default_">║UP--DIR                               ║</span>
+<span class="editor-editframeactive">╚═<span class="statusbar-_default_">  8   106/139   2087/2741</span>════════════</span><span class="editor-editframedrag">┘</span><span class="core-_default_">╚══════════════════════ 26G/39G (66%) ═╝</span>
+</samp></pre>
+
+<div class="char-well">
+	<p>Single lines</p>
+	<table>
+		<tr><td><input type="text" id="Lines-lefttop"   ></td><td><input type="text" id="Lines-topmiddle"   ></td><td><input type="text" id="Lines-righttop"></td><td><input type="text" id="Lines-horiz"></td></tr>
+		<tr><td><input type="text" id="Lines-leftmiddle"></td><td><input type="text" id="Lines-cross"       ></td><td><input type="text" id="Lines-rightmiddle"></td><td><input type="text" id="Lines-vert"></td></tr>
+		<tr><td><input type="text" id="Lines-leftbottom"></td><td><input type="text" id="Lines-bottommiddle"></td><td><input type="text" id="Lines-rightbottom"></td></tr>
+	</table>
+</div>
+<div class="char-well">
+	<p>Double lines</p>
+	<table>
+		<tr><td><input type="text" id="Lines-dlefttop"   ></td><td><input type="text" id="Lines-dtopmiddle"   ></td><td><input type="text" id="Lines-drighttop"></td><td><input type="text" id="Lines-dhoriz"></td></tr>
+		<tr><td><input type="text" id="Lines-dleftmiddle"></td><td></td><td><input type="text" id="Lines-drightmiddle"></td><td><input type="text" id="Lines-dvert"></td></tr>
+		<tr><td><input type="text" id="Lines-dleftbottom"></td><td><input type="text" id="Lines-dbottommiddle"></td><td><input type="text" id="Lines-drightbottom"></td></tr>
+	</table>
+</div>
+<div class="char-well">
+	<p>Other</p>
+	<table>
+		<tr><td><label for="widget-common-sort-sign-up">Sort up</label></td><td><input type="text" id="widget-common-sort-sign-up"></td></tr>
+		<tr><td><label for="widget-common-sort-sign-down">Sort down</label></td><td><input type="text" id="widget-common-sort-sign-down"></td></tr>
+		<tr><td><label for="widget-panel-hiddenfiles-sign-show">Show hidden files</label></td><td><input type="text" id="widget-panel-hiddenfiles-sign-show"></td></tr>
+		<tr><td><label for="widget-panel-hiddenfiles-sign-hide">Hide hidden files</label></td><td><input type="text" id="widget-panel-hiddenfiles-sign-hide"></td></tr>
+		<tr><td><label for="widget-panel-history-prev-item-sign">History back</label></td><td><input type="text" id="widget-panel-history-prev-item-sign"></td></tr>
+		<tr><td><label for="widget-panel-history-next-item-sign">History forward</label></td><td><input type="text" id="widget-panel-history-next-item-sign"></td></tr>
+		<tr><td><label for="widget-panel-history-show-list-sign">History show</label></td><td><input type="text" id="widget-panel-history-show-list-sign"></td></tr>
+		<tr><td><label for="widget-panel-filename-scroll-left-char">Scroll filename left</label></td><td><input type="text" id="widget-panel-filename-scroll-left-char"></td></tr>
+		<tr><td><label for="widget-panel-filename-scroll-right-char">Scroll filename right</label></td><td><input type="text" id="widget-panel-filename-scroll-right-char"></td></tr>
+		<tr><td><label for="editor-window-state-char">(Un)maximize editor</label></td><td><input type="text" id="editor-window-state-char"></td></tr>
+		<tr><td><label for="editor-window-close-char">Close editor</label></td><td><input type="text" id="editor-window-close-char"></td></tr>
+	</table>
+</div>
+
+</div></div>
+</li>
+</ul>
+
+<div id="color-well">
+	<div id="std-colors"><label>Standard colors</label>
+		<div><label><input type="radio" id="transparent" name="color" value="" checked>Unset</label></div>
+	</div>
+
+	<div id="color-cube"><label>Color cube</label>
+	</div>
+
+	<div id="gray-ramp"><label>Gray ramp</label>
+	</div>
+</div>
+
+</body>
+</html>
